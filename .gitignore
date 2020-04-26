@@ -1,15 +1,20 @@
 #Directories
 buildtest
+backup/
 __history/
 __recovery/
 Debug/
 Release/
 ipch/
 lib/
+packages/Lazarus/
 /resource/result/*.*
 CVAutoInstaller/
-/source/ffmpeg/examples
-/source/ffmpeg/headers
+
+!InitDelphiFFMPEG.cmd
+!/CheckCVDep/CheckCVDep.exe
+!opencv_classes*.dll
+!opencv_classes*.dll
 
 #ResourceFiles
 /resource/stereosample/Aloe/*.png
@@ -55,5 +60,3 @@ CVAutoInstaller/
 *.user
 *.filters
 *.user
-!opencv_classes*.dll
-!opencv_classes*.dll

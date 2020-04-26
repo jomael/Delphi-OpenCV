@@ -6,7 +6,7 @@
   Laentir Valetov
   email:laex@bk.ru
   Mikhail Grigorev
-  email:sleuthound@gmail.com
+  email:sleuthhound@gmail.com
   **************************************************************************************************
   You may retrieve the latest version of this file at the GitHub,
   located at git://github.com/Laex/Delphi-OpenCV.git
@@ -61,7 +61,7 @@ uses ocv.lib;
 
 {$IFNDEF DelphiOCVVersion_30}
 //function initModule_nonfree; external nonfree_lib index 895;
-function initModule_nonfree; external nonfree_lib name '?initModule_nonfree@cv@@YA_NXZ';
+function initModule_nonfree(): ByteBool; cdecl; external nonfree_lib name '?initModule_nonfree@cv@@YA_NXZ';
 
 initialization
 

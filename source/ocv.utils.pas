@@ -6,7 +6,7 @@
   Laentir Valetov
   email:laex@bk.ru
   Mikhail Grigorev
-  email:sleuthound@gmail.com
+  email:sleuthhound@gmail.com
   **************************************************************************************************
   You may retrieve the latest version of this file at the GitHub,
   located at git://github.com/Laex/Delphi-OpenCV.git
@@ -103,10 +103,12 @@ implementation
 uses
 {$IFDEF HAS_UNITSCOPE}
   System.SysUtils,
+  System.Math,
 {$ELSE}
   SysUtils,
+  Math,
 {$ENDIF}
-  ocv.core_c, System.Math;
+  ocv.core_c;
 
 {$IFDEF DELPHIXE3_UP}
 { TStringAnsiHelper }
@@ -119,19 +121,37 @@ end;
 
 function BitmapToIplImage(const bitmap:
 {$IFDEF DELPHIXE2_UP}Vcl.Graphics.TBitmap{$ELSE}Graphics.TBitmap{$ENDIF}): PIplImage;
+
 Var
   BMI: BITMAPINFO;
   MemDC: HDC;
+  DS: TDIBSection;
+  Bytes: Integer;
 begin
-  Assert(bitmap.PixelFormat = pf24bit); // only 24-bit
-  ZeroMemory(@BMI, sizeof(BMI));
-  BMI.bmiHeader.biSize := sizeof(BITMAPINFOHEADER);
-  BMI.bmiHeader.biWidth := bitmap.Width;
-  BMI.bmiHeader.biHeight := -bitmap.Height;
-  BMI.bmiHeader.biPlanes := 1;
-  BMI.bmiHeader.biBitCount := 24; // only 24-bit
-  BMI.bmiHeader.biCompression := BI_RGB;
-  Result := cvCreateImage(cvSize(bitmap.Width, bitmap.Height), IPL_DEPTH_8U, 3); // only 24-bit
+  (*
+    Var
+    buffersize: Integer;
+    Result := cvCreateImageHeader(cvSize(Bitmap.Width, Bitmap.Height), IPL_DEPTH_8U, 4); //32bit
+    cvCreateData(Result);
+    buffersize := (Bitmap.Width * Bitmap.Height) * 4;
+    copymemory(Result^.ImageData, Bitmap.Bits, buffersize);
+  *)
+
+  Assert(bitmap.PixelFormat in [pf24bit, pf32bit]); // only 24bit or 32bit
+
+  ZeroMemory(@BMI, SizeOf(BMI));
+  Bytes := GetObject(bitmap.Handle, SizeOf(DS), @DS);
+  Assert(Bytes <> 0, 'InvalidBitmap');
+  with bitmap, BMI.bmiHeader, DS.dsbm do
+  begin
+    biSize := SizeOf(BMI);
+    biWidth := Width;
+    biHeight := -Height;
+    biPlanes := 1;
+    biBitCount := bmBitsPixel * bmPlanes;
+    biSizeImage := BytesPerScanLine(biWidth, biBitCount, 32) * Abs(biHeight);
+  end;
+  Result := cvCreateImage(cvSize(bitmap.Width, bitmap.Height), IPL_DEPTH_8U, BMI.bmiHeader.biBitCount div 8);
   MemDC := CreateCompatibleDC(0);
   SelectObject(MemDC, bitmap.Handle);
   GetDIBits(MemDC, bitmap.Handle, 0, bitmap.Height, Result^.ImageData, BMI, DIB_RGB_COLORS);
@@ -192,9 +212,9 @@ end;
 // ---------------------------------------------------------------------------
 function CreateRGBBitmap(_Grab: PIplImage): HBITMAP;
 
-  function WIDTHBYTES(bits: DWORD): DWORD; {$IFDEF USE_INLINE}inline; {$ENDIF}
+  function WIDTHBYTES(Bits: DWORD): DWORD; {$IFDEF USE_INLINE}inline; {$ENDIF}
   begin
-    Result := ((((bits) + 31) div 32) * 4);
+    Result := ((((Bits) + 31) div 32) * 4);
   end;
 
 Var
@@ -203,7 +223,7 @@ Var
   pBits: Pointer;
   i, j: Integer;
 begin
-  lpbi.bmiHeader.biSize := sizeof(BITMAPINFOHEADER);
+  lpbi.bmiHeader.biSize := SizeOf(BITMAPINFOHEADER);
   lpbi.bmiHeader.biWidth := _Grab^.Width;
   lpbi.bmiHeader.biHeight := _Grab^.Height;
   lpbi.bmiHeader.biPlanes := 1;
@@ -238,7 +258,7 @@ begin
     begin
       for i := 0 to _Grab^.Height - 1 do
       begin
-        CopyMemory(App + _Grab^.Width * 3 * (_Grab^.Height - i - 1), PByte(_Grab^.ImageData) + _Grab^.Width * 3 * i, _Grab^.Width * 3);
+        copymemory(App + _Grab^.Width * 3 * (_Grab^.Height - i - 1), PByte(_Grab^.ImageData) + _Grab^.Width * 3 * i, _Grab^.Width * 3);
         // Копируем память
       end;
 
@@ -310,25 +330,25 @@ BEGIN
   TRY
     // assert((iplImg.Depth = 8) and (iplImg.NChannels = 3),
     // 'IplImage2Bitmap: Not a 24 bit color iplImage!');
-    bitmap.Height := iplImg.Height;
-    bitmap.Width := iplImg.Width;
+    bitmap.Height := iplImg^.Height;
+    bitmap.Width := iplImg^.Width;
     FOR j := 0 TO bitmap.Height - 1 DO
     BEGIN
       // origin BL = Bottom-Left
-      if (iplImg.Origin = IPL_ORIGIN_BL) then
+      if (iplImg^.Origin = IPL_ORIGIN_BL) then
         RowIn := bitmap.Scanline[bitmap.Height - 1 - j]
       else
         RowIn := bitmap.Scanline[j];
 
-      offset := longint(iplImg.ImageData) + iplImg.WidthStep * j;
+      offset := longint(iplImg^.ImageData) + iplImg^.WidthStep * j;
       dataByte := PByteArray(offset);
 
-      if (iplImg.ChannelSeq = 'BGR') then
+      if (iplImg^.ChannelSeq = 'BGR') then
       begin
         { direct copy of the iplImage row bytes to bitmap row }
-        CopyMemory(RowIn, dataByte, iplImg.WidthStep);
+        copymemory(RowIn, dataByte, iplImg^.WidthStep);
       End
-      else if (iplImg.ChannelSeq = 'GRAY') then
+      else if (iplImg^.ChannelSeq = 'GRAY') then
         FOR i := 0 TO bitmap.Width - 1 DO
         begin
           RowIn[3 * i] := dataByte[i];
@@ -399,7 +419,7 @@ Type
 Var
   isrgb: Boolean;
   isgray: Boolean;
-  buf: array [1 .. sizeof(BITMAPINFOHEADER) + sizeof(RGBQUAD) * 256] of byte;
+  buf: array [1 .. SizeOf(BITMAPINFOHEADER) + SizeOf(RGBQUAD) * 256] of byte;
   dibhdr: pBITMAPINFOHEADER;
   _dibhdr: TBitmapInfo ABSOLUTE buf;
   _rgb: pCOLORREF;
@@ -418,13 +438,13 @@ begin
     Exit(false);
 
   dibhdr := @buf;
-  _rgb := pCOLORREF(Integer(dibhdr) + sizeof(BITMAPINFOHEADER));
+  _rgb := pCOLORREF(Integer(dibhdr) + SizeOf(BITMAPINFOHEADER));
 
   if (isgray) then
     for i := 0 to 255 do
       _rgb[i] := rgb(i, i, i);
 
-  dibhdr^.biSize := sizeof(BITMAPINFOHEADER);
+  dibhdr^.biSize := SizeOf(BITMAPINFOHEADER);
   dibhdr^.biWidth := img^.Width;
   // Check origin for display
   if img^.Origin = 0 then
@@ -448,15 +468,13 @@ begin
     // Stretch the image to fit the rectangle
     iResult := StretchDIBits(dc, rect.left, rect.top,
 {$IFDEF DELPHIXE2_UP}rect.Width{$ELSE}rect.Right - rect.left{$ENDIF},
-{$IFDEF DELPHIXE2_UP}rect.Height{$ELSE}rect.Bottom - rect.top{$ENDIF}, 0, 0, img^.Width, img^.Height, img^.ImageData, _dibhdr,
-      DIB_RGB_COLORS, SRCCOPY);
+{$IFDEF DELPHIXE2_UP}rect.Height{$ELSE}rect.Bottom - rect.top{$ENDIF}, 0, 0, img^.Width, img^.Height, img^.ImageData, _dibhdr, DIB_RGB_COLORS, SRCCOPY);
     Result := (iResult > 0); // and (iResult <> GDI_ERROR);
   end
   else
   begin
     // Draw without scaling
-    iResult := SetDIBitsToDevice(dc, rect.left, rect.top, img^.Width, img^.Height, 0, 0, 0, img^.Height, img^.ImageData, _dibhdr,
-      DIB_RGB_COLORS);
+    iResult := SetDIBitsToDevice(dc, rect.left, rect.top, img^.Width, img^.Height, 0, 0, 0, img^.Height, img^.ImageData, _dibhdr, DIB_RGB_COLORS);
     Result := (iResult > 0); // and (iResult <> GDI_ERROR);
   end;
 end;
